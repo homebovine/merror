@@ -7,7 +7,6 @@
 !     number of quadrature points is len 
 !     length of beta is lb
 module commondata
-  implicit none
   save
   integer,parameter :: simus=1000,n=1000,m=15,len=30,iseed=1
   integer,parameter :: lb=3,lw=lb*(lb*3+14)
@@ -22,6 +21,7 @@ end module commondata
 
 program woz
   use commondata
+  implicit none
   integer :: ierr,i,j,k,iter,eflag,nbad
   double precision,dimension(lb) ::  beta,vfd,Beta2,Beta3,vfd2,beta1,vfd3
   double precision,dimension(2) :: msx,endpts
@@ -37,8 +37,8 @@ program woz
   tmp=rand(iseed)
   tol=1e-4
 !     true beta
-!  beta=[-1.0,1.0,1.0]
-  beta=0
+  beta=[-1.0,1.0,1.0]
+!  beta=0
   print*,'true beta=',beta
 !     mean and standard deviation of x is msx
   msx=[-1.0,1.0]
@@ -398,6 +398,7 @@ subroutine intbwyl(m,lb,beta,p,s2,x,i,len,xx,ww,pW,pWY,pY,yy,zz)
 end subroutine intbwyl
 !
 subroutine intw(m,lb,beta,s2,x,i,j,k,len,xx,ww,pW,pWY,yy)
+  implicit none
   integer,intent(in):: i,j,k,len,m,lb
   integer:: ii
   double precision,dimension(lb),intent(in):: beta

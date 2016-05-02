@@ -1,6 +1,7 @@
 library(splines)
 library(smoothmest)
 library(optimx)
+library(statmod)
 simu <- function(n,a, b,  sdis){
     x <- 2 * rbeta(n, a, b)  - 1
     if(sdis == 0){
