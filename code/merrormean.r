@@ -89,6 +89,7 @@ meanest <- function(theta,  my, mw, mc, sdis){
 
 smeanest <- function(theta,  my, mw, mc, sdis){
  #   print(theta)
+# theta <- pnorm(theta) * 4 - 2
     ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc)
     bst <- matrix(basisx %*% theta, n, llx, byrow = T)
     if(sdis == 0 ){
@@ -114,12 +115,12 @@ smeanest <- function(theta,  my, mw, mc, sdis){
 a <-  2
 b <- 2
 theta0 <- rep(-0.5, lb)
-nsim <- 500
+nsim <- 1100
 n <- 400
 sdis <- 0
 yw<- simu(1000, a, b, sdis)
-lly <- 20
-llw <- 20
+lly <- 15
+llw <- 15
 ly <-  seq(min(yw[, 1]), max(yw[, 1]), length.out = lly)
 lw <- seq(qnorm(0.01), qnorm(0.99), length.out = llw)
 Delta <-  diff(ly)[1] * diff(lw)[1]
@@ -146,12 +147,13 @@ llw <- length(lw)
 resmean <- matrix(NA, nsim, lb)
 for(itr in 1:nsim){
     print(itr)
+set.seed(itr)
 ywdata <- simu(n, a, b, sdis)
 my <- matrix(ywdata[, 1], n, llx)
 mw <- matrix(ywdata[, 2], n, llx)
 mlx <- matrix(lx, nrow = n, ncol = llx, byrow = T)
 mc <- matrix(lc, nrow = n, ncol = llx, byrow = T)
-tryres <-  try(optim(theta0, meanest, gr = smeanest, my, mw, mc, sdis,  method = 'BFGS',  hessian = FALSE))
+tryres <-  try(optim(theta0 * 1.01, meanest, gr = smeanest, my, mw, mc, sdis,  method = 'BFGS',  hessian = FALSE))
     if(class(tryres) != 'try-error'){
         resmean[itr, ] <- tryres$par
     }
@@ -169,21 +171,9 @@ tempf <- function(theta){
 fest <- apply(resmean %*% t(tempba), 2, median, na.rm = T)
 fest <- tempba %*% apply(resmean, 2, median, na.rm = T) 
  theta0 <- optim(theta0, tempf, gr = NULL,  method = 'BFGS',  hessian = FALSE) $par
+pdf('estmean.pdf')
 plot(x, f)
 points(x, fest, col = 3)
+dev.off()
 
 
-t <- rbeta(400, a, b)
-o <- order(t)
-t <- t[o]
-x <- 2 * t - 1
-
-f <-  1/2 * dbeta(t, a, b)
-mtheta <- apply(rtheta, 2, mean)
-fest1 <- matrix(NA, nsim, length(x))
-for(itr in 1 : nsim){
-    theta <- rtheta[itr, ]
-fest1[itr, ] <- exp(predict(basis, x) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
-}
-fest <- apply(fest1, 2, median)
-fest  <- exp(predict(basis, x) %*% mtheta) /sum(exp(basis %*% mtheta)  * weights[1, ])
