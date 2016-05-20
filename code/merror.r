@@ -13,7 +13,7 @@ simu <- function(n,a, b,  sdis){
     }else if(sdis == 1){
         eps <- rdoublex(n, 0, sig)
     }else{
-        eps <- runif(n, -sqrt(3), sqrt(3))
+        eps <- runif(n, -upper, upper)
     }
     y <- x + eps
     return(y)
@@ -28,7 +28,7 @@ denest <- function(theta, sdis, bs, y){
     else if(sdis == 1){
         deps <- bst * ddoublex(y - x, 0, sig) * weights
     }else{
-        deps <- bst * dunif(y - x, -sqrt(3), sqrt(3)) * weights
+        deps <- bst * dunif(y - x, -upper, upper) * weights
     }
 }
     
@@ -51,7 +51,7 @@ derivdenest <- function(theta, sdis, bs, y){
     else if(sdis == 1){
         deps <- bst * ddoublex(y - x, 0, sig) * weights
     }else{
-        deps <- bst * dunif(y - x, -sqrt(3), sqrt(3)) * weights
+        deps <- bst * dunif(y - x, -upper, upper) * weights
     }
     ddeps <- deps %*% basis
     return(list(deps, ddeps))
@@ -85,7 +85,7 @@ score <- function(theta, sdis, bs, y){
     else if(sdis == 1){
         deps <- bst * ddoublex(y - x, 0, sig) * weights
     }else{
-        deps <- bst * dunif(y - x, -sqrt(3), sqrt(3)) * weights
+        deps <- bst * dunif(y - x, -upper, upper) * weights
     }
     ddeps <- deps %*% basis
     return(list(deps, ddeps))
@@ -117,7 +117,7 @@ hessian <- function(theta, sdis, bs, y){
     else if(sdis == 1){
         deps <- bst * ddoublex(y - x, 0, sig) * weights
     }else{
-        deps <- bst * dunif(y - x, -sqrt(3), sqrt(3)) * weights
+        deps <- bst * dunif(y - x, -upper, upper) * weights
     }
     BBnum <- BBnum1 <- array(NA, c(lb, lb,  n))
     for(i in 1:n){
@@ -157,9 +157,10 @@ b <- 4
 sig <- sqrt(1/2)
 nsim <- 1100
 n <- 400
-sdis <- 2
+sdis <- 0
 ng <-  30
-t <- rbeta(10000, a, b)
+upper <- 1
+t <- rbeta(1000, a, b)
 lb <- 6
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
@@ -169,7 +170,7 @@ nh <- 0.5
 
 #theta0 <- rep(-0.5, lb)
 rtheta <- matrix(NA, nsim, lb)
-rvar <- matrix(NA, nsim, lb)
+rvar <- array(NA, c(lb, lb, nsim))#matrix(NA, nsim, lb)
 wn <- gauss.quad(ng,kind="legendre",alpha=0,beta=0)
 #wn$nodes <- seq(-1, 1, length.out = ng)
 #wn$weights <- diff(c(-1, wn$nodes))#wn$weights * 1 /sqrt(1 - wn$nodes^2)#
@@ -209,10 +210,10 @@ sand <- derivdenest(res$par, sdis, basis, my)
     rtheta[itr, ]<- res$par
     S<- eigen(sand)
     eig <- eigen(sand)
-    eig$value[eig$value<1e-5] <- 0
+    eig$value[eig$value<8e-6] <- 0
     eig$value[eig$value>0] <- eig$value[eig$value>0]^{-1}
     
-    rvar[ itr, ] <- diag(eig$vector %*% diag(eig$value) %*% t(eig$vector)/n)#diag(ginv(sand, tol= 1e-2)/n)# diag( temp/n)#diag((temp %*% sand %*% t(temp))/n)
+    rvar[, , itr ] <- (eig$vector %*% diag(eig$value) %*% t(eig$vector)/n)#diag(ginv(sand, tol= 1e-2)/n)# diag( temp/n)#diag((temp %*% sand %*% t(temp))/n)
     covflg[itr] <- res$convergence
 }
     
@@ -222,16 +223,31 @@ sand <- derivdenest(res$par, sdis, basis, my)
 
 
 mtheta <- apply(rtheta, 2, median)
-fest1 <- matrix(NA, nsim, length(x))
+fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
 for(itr in 1 : nsim){
     theta <- rtheta[itr, ]
 fest1[itr, ] <- exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
+temp <-  (diag(exp(eval.basis( x, objbasis) %*% theta)) *  eval.basis( x, objbasis)) /(sum(exp(basis %*% theta)  * weights[1, ]))^2 - exp(eval.basis( x, objbasis) %*% theta) %*% t(t(basis) %*% (exp(basis %*% theta)  * weights[1, ]))  /(sum(exp(basis %*% theta)  * weights[1, ]))^2
+vf <- diag(temp %*% rvar[, , itr] %*% t(temp ))
+fupper[itr, ] <- fest1[itr, ] + 1.96 * sqrt(vf)
+flower[itr, ] <- fest1[itr, ] - 1.96 * sqrt(vf)
+
 }
+ix <- 10
+mean(fupper[, ix] > dbeta(x[ix], a, b) & flower[, ix] <= dbeta(x[ix], a, b) )
+fupper <- apply(fupper, 2, median)
+flower <- apply(flower, 2, median)
 fest <- apply(fest1, 2, median)
-pdf('est1.pdf')
-plot(x, f)
-lines(x, fest)
+festupl <- apply(fest1, 2, quantile, c(0.025, 0.975))
+pdf('est2.pdf')
+plot(x, f, type = 'l', lty = 1)
+lines(x, fest, lty = 2)
 lines(density(x), col = 2)
+lines(x, fupper, lty = 2, col = 2)
+lines(x, flower, lty = 2, col = 2)
+lines(x, festupl[1, ], lty = 2, col = 3)
+lines(x, festupl[2, ], lty = 2, col = 3)
+
 dev.off()
 
 fest  <- exp(predict(basis, x) %*% mtheta) /sum(exp(basis %*% mtheta)  * weights[1, ])
