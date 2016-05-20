@@ -152,16 +152,16 @@ hessian <- function(theta, sdis, bs, y){
 
 
 
-a <- 4
-b <- 4
-sig <- sqrt(1/2)
+a <- 2
+b <- 2
+sig <- sqrt(1/3)#sqrt(1/4)
 nsim <- 1100
-n <- 400
-sdis <- 0
+n <- 1000
+sdis <- 2
 ng <-  30
 upper <- 1
 t <- rbeta(1000, a, b)
-lb <- 6
+lb <- 4
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
 nh <- 0.5
@@ -210,7 +210,7 @@ sand <- derivdenest(res$par, sdis, basis, my)
     rtheta[itr, ]<- res$par
     S<- eigen(sand)
     eig <- eigen(sand)
-    eig$value[eig$value<8e-6] <- 0
+    eig$value[eig$value<1e-5] <- 0 ##unif 8e-6
     eig$value[eig$value>0] <- eig$value[eig$value>0]^{-1}
     
     rvar[, , itr ] <- (eig$vector %*% diag(eig$value) %*% t(eig$vector)/n)#diag(ginv(sand, tol= 1e-2)/n)# diag( temp/n)#diag((temp %*% sand %*% t(temp))/n)
@@ -224,17 +224,23 @@ sand <- derivdenest(res$par, sdis, basis, my)
 
 mtheta <- apply(rtheta, 2, median)
 fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
+dfun <- function(theta){
+exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
+}
 for(itr in 1 : nsim){
     theta <- rtheta[itr, ]
 fest1[itr, ] <- exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
-temp <-  (diag(exp(eval.basis( x, objbasis) %*% theta)) *  eval.basis( x, objbasis)) /(sum(exp(basis %*% theta)  * weights[1, ]))^2 - exp(eval.basis( x, objbasis) %*% theta) %*% t(t(basis) %*% (exp(basis %*% theta)  * weights[1, ]))  /(sum(exp(basis %*% theta)  * weights[1, ]))^2
-vf <- diag(temp %*% rvar[, , itr] %*% t(temp ))
+temp <- jacobian(dfun, theta, method = 'simple') # (diag(as.vector(exp(eval.basis( x, objbasis) %*% theta))) %*%  eval.basis( x, objbasis)) /(sum(exp(basis %*% theta)  * weights[1, ]))^2 - exp(eval.basis( x, objbasis) %*% theta) %*% t(t(basis) %*% (exp(basis %*% theta)  * weights[1, ]))  /(sum(exp(basis %*% theta)  * weights[1, ]))^2
+vf <- diag(temp %*% ((rvar[, , itr])) %*% t(temp )) #
 fupper[itr, ] <- fest1[itr, ] + 1.96 * sqrt(vf)
 flower[itr, ] <- fest1[itr, ] - 1.96 * sqrt(vf)
 
 }
-ix <- 10
-mean(fupper[, ix] > dbeta(x[ix], a, b) & flower[, ix] <= dbeta(x[ix], a, b) )
+cp <- rep(NA, 1000)
+for(ix in 1:1000){
+
+cp[ix] <- mean(fupper[, ix] > dbeta(x[ix], a, b) & flower[, ix] <= dbeta(x[ix], a, b) )
+}
 fupper <- apply(fupper, 2, median)
 flower <- apply(flower, 2, median)
 fest <- apply(fest1, 2, median)
@@ -243,10 +249,10 @@ pdf('est2.pdf')
 plot(x, f, type = 'l', lty = 1)
 lines(x, fest, lty = 2)
 lines(density(x), col = 2)
-lines(x, fupper, lty = 2, col = 2)
-lines(x, flower, lty = 2, col = 2)
-lines(x, festupl[1, ], lty = 2, col = 3)
-lines(x, festupl[2, ], lty = 2, col = 3)
+#lines(x, fupper, lty = 2, col = 2)
+#lines(x, flower, lty = 2, col = 2)
+#lines(x, festupl[1, ], lty = 2, col = 3)
+#lines(x, festupl[2, ], lty = 2, col = 3)
 
 dev.off()
 
