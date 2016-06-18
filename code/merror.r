@@ -152,16 +152,16 @@ hessian <- function(theta, sdis, bs, y){
 
 
 
-a <- 2
-b <- 2
-sig <- sqrt(1/3)#sqrt(1/4)
+a <- 1.5
+b <- 1.5
+sig <- sqrt(1/3)#lap sqrt(1/3) #norm sqrt(1/5)#sqrt(1/4)
 nsim <- 1100
-n <- 1000
+n <- 2000
 sdis <- 2
 ng <-  30
 upper <- 1
-t <- rbeta(1000, a, b)
-lb <- 4
+
+lb <- 6
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
 nh <- 0.5
@@ -175,12 +175,14 @@ wn <- gauss.quad(ng,kind="legendre",alpha=0,beta=0)
 #wn$nodes <- seq(-1, 1, length.out = ng)
 #wn$weights <- diff(c(-1, wn$nodes))#wn$weights * 1 /sqrt(1 - wn$nodes^2)#
 wn$nodes <- 1/2 * wn$nodes + 1/2
-objbasis <- create.bspline.basis(c(0, 1),  nbasis = lb,  norder = 4)
+rnodes <- range(wn$nodes)
+objbasis <- create.bspline.basis(range(wn$nodes), breaks = c(rnodes[1], 0.1, 0.9, rnodes[2]),  norder = 4)
 basis <- eval.basis(wn$nodes, objbasis)#ns(wn$nodes, df = lb,     Boundary.knots= range(0, 1))
 wn$weights <- 1/2 * wn$weights
 #basis <- predict(basis, wn$nodes)
 nodes <-  matrix(wn$nodes, n, ng, byrow = T) 
 weights <-  matrix(wn$weights, n, ng, byrow = T)
+t <- runif(n, rnodes[1], rnodes[2])
 covflg <- rep(NA, nsim)
 
 o <- order(t)
@@ -236,8 +238,8 @@ fupper[itr, ] <- fest1[itr, ] + 1.96 * sqrt(vf)
 flower[itr, ] <- fest1[itr, ] - 1.96 * sqrt(vf)
 
 }
-cp <- rep(NA, 1000)
-for(ix in 1:1000){
+cp <- rep(NA, n)
+for(ix in 1:n){
 
 cp[ix] <- mean(fupper[, ix] > dbeta(x[ix], a, b) & flower[, ix] <= dbeta(x[ix], a, b) )
 }
@@ -248,7 +250,7 @@ festupl <- apply(fest1, 2, quantile, c(0.025, 0.975))
 pdf('est2.pdf')
 plot(x, f, type = 'l', lty = 1)
 lines(x, fest, lty = 2)
-lines(density(x), col = 2)
+#lines(density(x), col = 2)
 #lines(x, fupper, lty = 2, col = 2)
 #lines(x, flower, lty = 2, col = 2)
 #lines(x, festupl[1, ], lty = 2, col = 3)
