@@ -1,3 +1,4 @@
+
 library(splines)
 library(smoothmest)
 library(optimx)
@@ -26,7 +27,7 @@ sdlap <- function(x, m, s){
       1/(2 * s) * exp( -(x- m)/s) * pnorm((x - m)/h, 0, 1)  + 1/(2 * s) * exp( -(m- x)/s) * (1 - pnorm((x - m)/h, 0, 1) )
 
 }
-ahmatrix <- function(theta, sdis, bs, ywxc, ywxxc){
+ahmatrix <- function(theta, sdis, bs, ywxc, ywxxc, tol){
     bst1<- (basis1 %*% theta)
     bst2 <- (basis2 %*% theta)
     bst <- (basis %*% theta)
@@ -71,13 +72,67 @@ ahmatrix <- function(theta, sdis, bs, ywxc, ywxxc){
     
         mb <- t(mH %*% basisx)
     
-    ma = mb %*% mA %*% ginv(t(mA) %*% mA, 1e-16)#mb %*% ginv(t(mA), tol = 1e-16)## #mb %*% ginv(t(mA), tol = 1e-16)#
+    ma = mb %*% mA %*% ginv(t(mA) %*% mA, tol)#### ##mb %*% ginv(t(mA), tol)#
    return(ma)
     
 }
-meanest <- function(theta,  my, mw, mc, sdis){
+
+ahmatrix1 <- function(theta, sdis, bs, ywxc, ywxxc, tol){
+    bst1<- (basis1 %*% theta)
+    bst2 <- (basis2 %*% theta)
+    bst <- (basis %*% theta)
+    suml <- function(c, x, y, w,  sdis){
+#    	 oy <- log((1 + y)/(1 - y))
+#    	 ow <- log((1 + w)/(1 - w))	
+        if(sdis ==0 ){
+            deps <- dnorm(w - x, 0, sigw) * dnorm(y - bst, 0, sig) * c #* -2/(w ^2 - 1) * -2/(y^2 - 1)
+        }else if (sdis == 1 ){
+            deps <- ddoublex(w - x, 0, sigw) * dnorm(y - bst, 0, sig) * c 
+        }else {
+             deps <- dunif(w - x, ul, up) * dnorm(y - bst, 0, sig) * c        }
+    }
+    sumL <- suml(ywxc[, 1], ywxc[, 2], ywxc[, 3], ywxc[, 4],  sdis)
+     sumL <- apply(matrix(sumL, ncol = llx, byrow = T), 1, sum)
+    sumL <- rep(sumL,  llx^2)
+    sumL[sumL == 0] = sumL[sumL == 0] + 1e-16
+    integrand1 <- function(x1, x2,c,  y, w, sdis){
+    	       #oy <- log((1 + y)/(1 - y))
+    	       #ow <- log((1 + w)/(1 - w))	
+    if(sdis == 0 ){
+        deps <-  dnorm(w - x2, 0, sigw) *c *  dnorm(y - bst2,  0, sig)/sumL * dnorm(w - x1, 0, sigw) *   dnorm(y - bst1,  0, sig) 
+        ddeps <-  dnorm(w - x2, 0, sigw) *c *  ddnorm(y - bst2)/sumL * dnorm(w - x1, 0, sigw) *   dnorm(y - bst1,  0, sig)
+    }
+    else if(sdis == 1){
+         deps <-  ddoublex(w - x2, 0, sigw) *c *  dnorm(y - bst2,  0, sig)/sumL * ddoublex(w - x1, 0, sigw) *   dnorm(y - bst1,  0, sig)
+        ddeps <- ddoublex(w - x2, 0, sigw) *c *  ddnorm(y - bst2)/sumL * ddoublex(w - x1, 0, sigw) *   dnorm(y - bst1,  0, sig)
+        
+    }else{
+        deps <-  dunif(w - x2, ul, up) *c *  dnorm(y - bst2,  0, sig)/sumL * dunif(w - x1, ul, up) *   dnorm(y - bst1,  0, sig)
+        ddeps <- dunif(w - x2, ul, up) *c *  ddnorm(y - bst2)/sumL * dunif(w - x1, ul, up) *   dnorm(y - bst1,  0, sig) 
+       
+    }
+    return(cbind(deps, ddeps))
+}
+    temp <- integrand1(ywxxc[, 3], ywxxc[, 4], ywxxc[, 5], ywxxc[, 1], ywxxc[, 2], sdis)
+    mA <- matrix(temp[, 1], ncol = lly * llw, byrow = T) %*% Delta
+    mH <- matrix(temp[, 2], ncol = lly * llw, byrow = T) %*% Delta
+    mA <- matrix(mA,  llx, llx)
+    mH <- -matrix(mH,  llx, llx)
+    mb <- matrix(NA, lb, llx)
+    
+        mb <- t(mH %*% basisx)
+    
+    ma = mb %*% ginv(t(mA), tol)#
+   return(ma)
+    
+}
+
+
+
+
+meanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
  #   print(theta)
-    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc)
+    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc, tol)
     bst <- matrix(basisx %*% theta, n, llx, byrow = T)
     if(sdis == 0 ){
         deps <-  dnorm(mw - mlx, 0, sigw) *  dnorm(my - bst,  0, sig) * mc
@@ -99,15 +154,15 @@ meanest <- function(theta,  my, mw, mc, sdis){
     dom[dom == 0] = dom[dom == 0] + 1e-16
     nums <- ddeps %*% basisx
     S <- -nums/dom - numa/dom	
-    #wt <<-ginv( t(S) %*% S/n, 1e-16)
+    wt <<- ginv( t(S) %*% S/n)
     S <- apply(S, 2, mean)
     as.numeric(t(S) %*% wt %*% S)
 }
 
-smeanest <- function(theta,  my, mw, mc, sdis){
+smeanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
  #   print(theta)
 # theta <- pnorm(theta) * 4 - 2
-    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc)
+    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc, tol)
     bst <- matrix(basisx %*% theta, n, llx, byrow = T)
     if(sdis == 0 ){
         deps <-  dnorm(mw - mlx, 0, sigw) *  dnorm(my - bst,  0, sig) * mc
@@ -132,10 +187,10 @@ smeanest <- function(theta,  my, mw, mc, sdis){
 }
 
 
-ssmeanest <- function(theta,  my, mw, mc, sdis){
+ssmeanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
  #   print(theta)
 # theta <- pnorm(theta) * 4 - 2
-    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc)
+    ma <- ahmatrix(theta, sdis, bs, ywxc, ywxxc, tol)
     bst <- matrix(basisx %*% theta, n, llx, byrow = T)
     if(sdis == 0 ){
         deps <-  dnorm(mw - mlx, 0, sigw) *  dnorm(my - bst,  0, sig) * mc
@@ -168,8 +223,8 @@ n <- 2000
 h <- n^{-1/5}
 sdis <- 0
 
-sig <- 0.5 #  sqrt((0.5)^2/2) lap = 1
-sigw <- 0.5 #  sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48
+sig <- 1 #sqrt((0.5)^2/2) #lap = 1
+sigw <- 1.5# sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48
 yw<- simu(1000, a, b, sdis)
 lly <- 10
 llw <- 10
@@ -257,11 +312,11 @@ my <- matrix(ywdata[, 1], n, llx)
 mw <- matrix(ywdata[, 2], n, llx)
 mlx <- matrix(lx, nrow = n, ncol = llx, byrow = T)
 mc <- matrix(olc, nrow = n, ncol = llx, byrow = T)
-wt <-  ginv(ssmeanest(theta0, my, mw, mc, sdis), 1e-16)#diag(1, lb, lb)#
-#invA <-  ginv(jacobian(smeanest, theta0, method="simple", side=NULL, method.args=list(eps = 1e-4), my, mw, mc, sdis), tol = 1e-16)
-#S <- smeanest(theta0, my, mw, mc, sdis)
-#invAS <- as.numeric(abs(invA %*% S)) * c(1, rep(1, lb - 1))  * 6
-tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'BFGS',  itnmax=NULL, hessian=FALSE, control=list(factr = 1e7, pgtol = 1e-7, parscale = c(1e-2, rep(1, 4), 1e-2) , ndeps = rep(1e-7, lb)), my = my, mw = mw, mc = mc, sdis = sdis)
+wt <- ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-8, ahmatrix), 1e-8)###diag(c(1, 2, 4, 4, 2,  1)) #
+invA <-  ginv(jacobian(smeanest, theta0, method="simple", side=NULL, method.args=list(eps = 1e-4), my, mw, mc, sdis, 1e-8, ahmatrix), tol = 1e-8)
+S <- smeanest(theta0, my, mw, mc, sdis, 1e-8, ahmatrix)
+invAS <- as.numeric(abs(invA %*% S)) * c(1, rep(1, lb - 1))  * 6
+tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = theta0 - invAS, upper = theta0 + invAS, method = 'bobyqa',  itnmax=NULL, hessian=FALSE, control=list(factr = 1e9, pgtol = 1e-6, parscale = c(1e-2, rep(1, 4), 1e-2) , ndeps = rep(1e-7, lb)), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-8, ahmatrix = ahmatrix)
 tryres$par <- coef(tryres)
 tryres$convergence <- tryres$convcode
 
@@ -270,9 +325,9 @@ print(tryres$convergence)
     if(class(tryres) != 'try-error'){
         resmean[itr, ] <- tryres$par
 
-	jh <- jacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  4e-5), my, mw, mc, sdis)
-	sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis)
-	jwh <- ginv(t(jh) %*% wt %*% jh, 1e-16)
+	jh <- myjacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4)), my, mw, mc, sdis, 1e-8, ahmatrix)
+	sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis, 1e-8, ahmatrix)
+	jwh <- ginv(t(jh) %*% wt %*% jh, 1e-8)
 	
 	resvar[, , itr] <- jwh %*% t(jh) %*% wt %*% sh %*% t(wt) %*% jh %*% t(jwh)
     }
@@ -280,13 +335,18 @@ print(tryres$convergence)
 
 
 
-print(rbind(resmean[itr, ],theta0,  sqrt(diag(resvar[,  ,itr]/n))))
+print(rbind(theta0 - invAS, resmean[itr, ],   theta0 + invAS, theta0, sqrt(diag(resvar[,  ,itr]/n))))
 }
 fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
 #fest <- tempba %*% apply(resmean, 2, median, na.rm = T) 
 
-
-
+#temp <- apply(abs(resmean - matrix(theta0, nsim, lb, byrow = T)), 1, min)
+#resmean <- resmean[temp > 1e-5, ]
+#resvar <- resvar[, , temp> 1e-5]
+apply(resmean, 2, median, na.rm = T)
+sqrt(diag(apply(resvar, c(1, 2), median, na.rm = T)/n))
+apply(resmean, 2, sd, na.rm = T)
+nsim <- nrow(resmean)
 mvf <- fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
 estv <- (cov.rob(resmean)$cov)
 for(itr in 1 : nsim){
@@ -316,29 +376,139 @@ for(ix in 1:length(x)){
 
 cp[ix] <- mean(fupper[1:nsim, ix] >= f[ix] & flower[1:nsim, ix] <= f[ix] , na.rm = T)
 }
+
+
+
 fupper <- apply(fupper, 2, median, na.rm = T)
 flower <- apply(flower, 2, median, na.rm = T)
 fest <- apply(fest1, 2, median, na.rm = T)
 festupl <- apply(fest1, 2, quantile, c(0.025, 0.975), na.rm = T)
-pdf('est2.pdf')
+
+pdf('mestunif.pdf')
 plot(x, f, type = 'l', lty = 1)
-lines(x, fest, lty = 2, col = 2)
+lines(x, fest, lty = 2)
 #lines(density(x), col = 2)
-lines(x, fupper, lty = 2, col = 2)
-lines(x, flower, lty = 2, col = 2)
+#lines(x, fupper, lty = 2, col = 2)
+#lines(x, flower, lty = 2, col = 2)
 #lines(x, festupl[1, ], lty = 2, col = 3)
 #lines(x, festupl[2, ], lty = 2, col = 3)
 
 dev.off()
-pdf('cpest.pdf')
-plot(cp~x)
+temp1 <- apply(fest1, 2, sd)
+temp2 <- sqrt(apply(((fupper - fest1)/1.96)^2, 2, mean))
+pdf('varlap.pdf')
+plot(temp2 ~ temp1, ylab= 'estimated variance', xlab = 'emprical variance', main = '')
+abline(0, 1)
 dev.off()
 
-
-pdf('estmean.pdf')
-plot(x, f)
-points(x, fest, col = 3)
+pdf('mcpunif.pdf')
+plot(cp ~x, xlab = 'X', ylab = 'coverage probability', main = '', ylim = c(0.6, 1))
+abline(h = 0.95)
 dev.off()
+
 
 
 # try(spg(theta0, meanest, gr = NULL,  method = 2, lower = theta0 - invAS, upper = theta0 + invAS, project = NULL, projectArgs = NULL, control = list(checkGrad = TRUE, ftol = 1e-7, gtol = 1e-7, M = 20, maxfeval = 1000, eps = 1e-8), quiet = FALSE, alertConvergence=TRUE,  my = my, mw = mw, mc = mc, sdis = sdis))#try(optim(theta0, meanest, gr =  NULL, my, mw, mc, sdis,  method = 'L-BFGS-B', control = list(factr = 1e7, pgtol = 1e-7, parscale = c(0.1, rep(1, 4), 0.1) , ndeps = rep(1e-10, lb)), lower = theta0-  invAS, upper = theta0 +  invAS,  hessian = FALSE))#try(nlm(meanest, theta0, my, mw, mc, sdis))####### try(dfsane(theta0, smeanest, method=3, control=list(), quiet=FALSE, alertConvergence=TRUE, my, mw, mc, sdis))# try(nls.lm(theta0, lower=NULL, upper=NULL, smeanest, jac = NULL,control = nls.lm.control(ftol = 1e-8, ptol = 1e-8, epsfcn = 1e-4),my, mw, mc, sdis))# multiroot(smeanest, theta0, maxiter = 100, rtol = 1e-6, atol = 1e-6, ctol = 1e-6,useFortran = TRUE, positive = FALSE, jacfunc = NULL, jactype = "fullint", verbose = FALSE, bandup = 1, banddown = 1, parms = NULL, my, mw, mc, sdis)
+
+
+
+myjacobian <- function(func, x, method="Richardson", side=NULL,
+      method.args=list(), ...){
+  f <- func(x, ...)
+  n <- length(x)	 #number of variables.
+
+  if (is.null(side)) side <- rep(NA, n)
+  else {
+       if(n != length(side)) 
+          stop("Non-NULL argument 'side' should have the same length as x")
+       if(any(1 != abs(side[!is.na(side)]))) 
+          stop("Non-NULL argument 'side' should have values NA, +1, or -1.")
+       }
+
+  if(method=="simple"){
+    #  very simple numerical approximation
+    args <- list(eps=1e-4) # default
+    args[names(method.args)] <- method.args
+
+    side[is.na(side)] <- 1
+    eps <- (args$eps) * side
+
+    df <-matrix(NA, length(f), n)
+    for (i in 1:n) {
+      dx <- x
+      dx[i] <- dx[i] + eps[i] 
+      df[,i] <- (func(dx, ...) - f)/eps[i]
+     }
+    return(df)
+    } 
+  else if(method=="complex"){ # Complex step gradient
+    if (any(!is.na(side))) stop("method 'complex' does not support non-NULL argument 'side'.")
+    # Complex step Jacobian
+    eps <- .Machine$double.eps
+    h0  <-  rep(0, n)
+    h0[1] <- eps * 1i
+    v <- try(func(x+h0, ...))
+    if(inherits(v, "try-error")) 
+      stop("function does not accept complex argument as required by method 'complex'.")
+    if(!is.complex(v)) 
+      stop("function does not return a complex value as required by method 'complex'.")
+  
+    h0[1]  <- 0
+    jac <- matrix(NA, length(v), n)
+    jac[, 1] <- Im(v)/eps
+    if (n == 1) return(jac)
+    for (i in 2:n) {
+      h0[i] <- eps * 1i
+      jac[, i] <- Im(func(x+h0, ...))/eps 
+      h0[i]  <- 0
+      }
+    return(jac)
+    } 
+  else if(method=="Richardson"){
+    args <- list(eps=1e-4, d=0.0001, zero.tol=sqrt(.Machine$double.eps/7e-7), 
+                r=4, v=2, show.details=FALSE) # default
+    args[names(method.args)] <- method.args
+    d <- args$d
+    r <- args$r
+    v <- args$v		  
+    a <- array(NA, c(length(f),r, n) )
+  
+    h <- abs(d*x) + args$eps * (abs(x) < args$zero.tol)
+    pna <- (side == 1)  & !is.na(side) # double these on plus side
+    mna <- (side == -1) & !is.na(side) # double these on minus side
+
+    for(k in 1:r)  { # successively reduce h	       
+       ph <- mh <- h
+       ph[pna] <- 2 * ph[pna] 
+       ph[mna] <- 0           
+       mh[mna] <- 2 * mh[mna] 
+       mh[pna] <- 0           
+
+       for(i in 1:n)  {
+        a[,k,i] <- (func(x + ph*(i==seq(n)), ...) -  
+     		     func(x - mh*(i==seq(n)), ...))/(2*h[i])
+    		      #if((k != 1)) a[,(abs(a[,(k-1),i]) < 1e-20)] <- 0 #some func are unstable near zero
+    		       }
+       h <- h/v     # Reduced h by 1/v.
+       }     
+
+   for(m in 1:(r - 1)) {	  
+       a <- (a[,2:(r+1-m),,drop=FALSE]*(4^m)-a[,1:(r-m),,drop=FALSE])/(4^m-1)
+     }
+  # drop second dim of a, which is now 1 (but not other dim's even if they are 1
+  return(array(a, dim(a)[c(1,3)]))  
+  } else stop("indicated method ", method, "not supported.")
+}
+
+norm 
+estvar 0.01017451 0.01040998 0.08435114 0.01125017 0.01101194 0.01089025
+emprivar 0.005077058 0.003526097 0.007586690 0.005226456 0.004502745 0.004356297
+
+lap
+estvar 0.008908322 0.008644043 0.011682261 0.013750753 0.007200846 0.021588959
+emprivar 0.003917783 0.011954769 0.011307511 0.012080420 0.007080073 0.012469778
+
+
+unif
+estvar 0.04455455 0.03016752 0.03324734 0.03627913 0.03130320 0.03198942
+emprivar 0.03389457 0.03592167 0.04709979 0.06889741 0.03098955 0.02879360

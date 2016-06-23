@@ -247,7 +247,7 @@ fupper <- apply(fupper, 2, median)
 flower <- apply(flower, 2, median)
 fest <- apply(fest1, 2, median)
 festupl <- apply(fest1, 2, quantile, c(0.025, 0.975))
-pdf('est2.pdf')
+pdf('estlap.pdf')
 plot(x, f, type = 'l', lty = 1)
 lines(x, fest, lty = 2)
 #lines(density(x), col = 2)
@@ -257,6 +257,27 @@ lines(x, fest, lty = 2)
 #lines(x, festupl[2, ], lty = 2, col = 3)
 
 dev.off()
+temp1 <- apply(fest1, 2, sd)
+temp2 <- sqrt(apply(((fupper - fest1)/1.96)^2, 2, mean))
+pdf('varlap.pdf')
+plot(temp2 ~ temp1, ylab= 'estimated variance', xlab = 'emprical variance', main = '')
+abline(0, 1)
+dev.off()
+
+pdf('cpunif.pdf')
+plot(cp ~x, xlab = 'X', ylab = 'coverage probability', main = '', ylim = c(0.6, 1))
+abline(h = 0.95)
+dev.off()
 
 fest  <- exp(predict(basis, x) %*% mtheta) /sum(exp(basis %*% mtheta)  * weights[1, ])
+
+emprical uniform  1.7686831 0.8835746 1.0391104 0.9973378 0.8165267 1.7591435
+estimated unifrom 1.614624 1.023110 1.189571 1.178298 1.031448 1.621196
+
+
+emprical norm 1.1208815 0.9302755 1.9416143 1.9962105 0.9787644 1.1324871
+estimated norm 1.708348 1.452574 2.825442 2.827463 1.484432 1.660037
+
+estimated lap 1.701376 1.262628 1.965442 1.977015 1.291913 1.700157
+emprical lap 1.641232 1.500220 2.092283 1.753365 1.371908 1.800199
 
