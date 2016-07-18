@@ -1,4 +1,3 @@
-
 library(splines)
 library(smoothmest)
 library(optimx)
@@ -16,7 +15,7 @@ simu <- function(n,a, b,  sdis){
         eps <- runif(n, ul, up)
     }
     w <- x + eps
-    mx <-   x  * (x - 0.5) * (x - 1) #sin(x * 2  * pi) #dbeta(x, 2, 2)#2* sin((x - 0.5)  * 12) * exp(-((x - 0.5) * 12)^2/10)##1 - 28.76 * x + 251.97 * x^2 - 1028.50 * x^3 + 2069.72 * x^4 
+    mx <-  sin(x * 2 * pi)# x  * (x - 0.5) * (x - 1) #sin(x * 2  * pi) #dbeta(x, 2, 2)#2* sin((x - 0.5)  * 12) * exp(-((x - 0.5) * 12)^2/10)##1 - 28.76 * x + 251.97 * x^2 - 1028.50 * x^3 + 2069.72 * x^4 
     y <- mx  + rnorm(n, 0, sig) 
     return(cbind(y, w))
 }
@@ -154,7 +153,7 @@ meanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
     dom[dom == 0] = dom[dom == 0] + 1e-16
     nums <- ddeps %*% basisx
     S <- -nums/dom - numa/dom	
-    wt <<- ginv( t(S) %*% S/n)
+    #wt <<-ginv( t(S) %*% S/n, 1e-16)
     S <- apply(S, 2, mean)
     as.numeric(t(S) %*% wt %*% S)
 }
@@ -219,12 +218,12 @@ a <-  2
 b <- 2
 #theta0 <- rep(-0.5, lb)
 nsim <- 1100
-n <- 2000
+n <- 500
 h <- n^{-1/5}
-sdis <- 0
+sdis <- 1
 
-sig <- 1 #sqrt((0.5)^2/2) #lap = 1
-sigw <- 1.5# sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48
+sig <-  1 #sqrt((0.5)^2/2) #lap = 1
+sigw <- 1.5 # sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48
 yw<- simu(1000, a, b, sdis)
 lly <- 10
 llw <- 10
@@ -248,7 +247,7 @@ ly <-  unique(ly)
 lw <- unique(lw)
 Delta <- getWeights(myGrid) * 1/(lyw[, 1] * (1 - lyw[, 1])) * 1/(lyw[, 2] * (1 - lyw[, 2]))
 }else{
-myGrid <- createNIGrid(dim=2, type=c("GLe", "GLe"), level=c(6, 6))
+#myGrid <- createNIGrid(dim=2, type=c("GLe", "GLe"), level=c(6, 6))
 #lyw <- getNodes(myGrid)
 #ly <- log(lyw[, 1]/(1- lyw[, 1]))
 #lw <- v * (lyw[, 2] - 1/2) + u
@@ -268,7 +267,7 @@ x <-  rbeta(1000, a, b)
 o <- order(x)
 x <- x[o]
 lux <- pbeta(x, a, b)
-lx <-  qbeta(seq(0.0001, 0.9999, length.out = 15), a, b) ##seq(0.01, 1, length.out = 15)#
+lx <-  qbeta(seq(0, 1, length.out = 15), a, b) ##seq(0.01, 1, length.out = 15)#
 cdom <- sum(dbeta(lx, a, b))
 
 olc <- dbeta(lx, a, b)/cdom
@@ -280,8 +279,8 @@ lc <- dbeta(ywx[, 1] , a, b)/cdom
 ywxc <- cbind(lc, ywx)
 
 knots = c(0.25,  0.5,  0.75)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
-lb = 6
-b2 <- create.bspline.basis(range(x, lx), breaks = c(0,  0.2, 0.8, 1), norder = 4)
+lb = ceiling(1.3 * n^(1/5))
+b2 <- create.bspline.basis(range(x, lx), nbasis = lb, norder = 4)
 basis2 <- eval.basis(ywxxc[, 4], b2)#bs(ywxxc[, 4], 3, knots, Boundary.knots = c(0, 1))
 basis1 <-eval.basis(ywxxc[, 3], b2)# bs(ywxxc[, 3], 3, knots, Boundary.knots = c(0, 1))
 basis <- eval.basis(ywxc[, 2], b2) # bs(ywxc[, 2], 3, knots, Boundary.knots = c(0, 1))
@@ -294,7 +293,7 @@ llw <- length(lw)
 
 
 
-f =  x *  (x - 0.5) * (x - 1)#sin(x * 2  * pi) #dbeta(x, 2, 2)# 2* sin((x - 0.5)  * 12) * exp(-((x - 0.5) * 12)^2/10)#2000 * ((x- 0.5)* 10) - 251.97 * ((x -0.5)*10)^2 - 102 * ((x -0.5)*10)^3 +20* ((x -0.5) * 10)^4 #1 - 28.76 * x + 251.97 * x^2 - 1028.50 * x^3 +2069.72 * x^4 #-1975.95 * x^5 +712.78 * x^6
+f = sin(x * 2  * pi) # x *  (x - 0.5) * (x - 1)#dbeta(x, 2, 2)# 2* sin((x - 0.5)  * 12) * exp(-((x - 0.5) * 12)^2/10)#2000 * ((x- 0.5)* 10) - 251.97 * ((x -0.5)*10)^2 - 102 * ((x -0.5)*10)^3 +20* ((x -0.5) * 10)^4 #1 - 28.76 * x + 251.97 * x^2 - 1028.50 * x^3 +2069.72 * x^4 #-1975.95 * x^5 +712.78 * x^6
 tempba <-eval.basis(x, b2) #bs(x, 3, knots, Boundary.knots = c(0, 1))
 tempf <- function(theta){
     sum((tempba %*% theta - f)^2)
@@ -312,11 +311,11 @@ my <- matrix(ywdata[, 1], n, llx)
 mw <- matrix(ywdata[, 2], n, llx)
 mlx <- matrix(lx, nrow = n, ncol = llx, byrow = T)
 mc <- matrix(olc, nrow = n, ncol = llx, byrow = T)
-wt <- ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-8, ahmatrix), 1e-8)###diag(c(1, 2, 4, 4, 2,  1)) #
-invA <-  ginv(jacobian(smeanest, theta0, method="simple", side=NULL, method.args=list(eps = 1e-4), my, mw, mc, sdis, 1e-8, ahmatrix), tol = 1e-8)
-S <- smeanest(theta0, my, mw, mc, sdis, 1e-8, ahmatrix)
-invAS <- as.numeric(abs(invA %*% S)) * c(1, rep(1, lb - 1))  * 6
-tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = theta0 - invAS, upper = theta0 + invAS, method = 'bobyqa',  itnmax=NULL, hessian=FALSE, control=list(factr = 1e9, pgtol = 1e-6, parscale = c(1e-2, rep(1, 4), 1e-2) , ndeps = rep(1e-7, lb)), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-8, ahmatrix = ahmatrix)
+wt <-  ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-16, ahmatrix), 1e-16)##
+#invA <-  ginv(jacobian(smeanest, theta0, method="simple", side=NULL, method.args=list(eps = 1e-4), my, mw, mc, sdis), tol = 1e-16)
+#S <- smeanest(theta0, my, mw, mc, sdis)
+#invAS <- as.numeric(abs(invA %*% S)) * c(1, rep(1, lb - 1))  * 6
+tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'bobyqa',  itnmax=NULL, hessian=FALSE, control=list(factr = 1e7, pgtol = 1e-7, parscale = c(1e-2, rep(1, 4), 1e-2) , ndeps = rep(1e-7, lb)), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-16, ahmatrix = ahmatrix)
 tryres$par <- coef(tryres)
 tryres$convergence <- tryres$convcode
 
@@ -325,9 +324,9 @@ print(tryres$convergence)
     if(class(tryres) != 'try-error'){
         resmean[itr, ] <- tryres$par
 
-	jh <- myjacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4)), my, mw, mc, sdis, 1e-8, ahmatrix)
-	sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis, 1e-8, ahmatrix)
-	jwh <- ginv(t(jh) %*% wt %*% jh, 1e-8)
+	jh <- myjacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4)), my, mw, mc, sdis, 1e-16, ahmatrix)
+	sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis, 1e-16, ahmatrix)
+	jwh <- ginv(t(jh) %*% wt %*% jh, 1e-14)
 	
 	resvar[, , itr] <- jwh %*% t(jh) %*% wt %*% sh %*% t(wt) %*% jh %*% t(jwh)
     }
@@ -335,18 +334,19 @@ print(tryres$convergence)
 
 
 
-print(rbind(theta0 - invAS, resmean[itr, ],   theta0 + invAS, theta0, sqrt(diag(resvar[,  ,itr]/n))))
+print(rbind(resmean[itr, ],theta0,  sqrt(diag(resvar[,  ,itr]/n))))
 }
+save(resmean, resvar, tempba, file = paste('resmean', n, sdis, sep = '_'))
 fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
 #fest <- tempba %*% apply(resmean, 2, median, na.rm = T) 
 
-#temp <- apply(abs(resmean - matrix(theta0, nsim, lb, byrow = T)), 1, min)
-#resmean <- resmean[temp > 1e-5, ]
-#resvar <- resvar[, , temp> 1e-5]
+temp <- apply(abs(resmean - matrix(theta0, nsim, lb, byrow = T)), 1, min)
+#resmean <- resmean[temp > 1e-8, ]
+#resvar <- resvar[, , temp> 1e-8]
 apply(resmean, 2, median, na.rm = T)
 sqrt(diag(apply(resvar, c(1, 2), median, na.rm = T)/n))
 apply(resmean, 2, sd, na.rm = T)
-nsim <- nrow(resmean)
+#nsim <- nrow(resmean)
 mvf <- fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
 estv <- (cov.rob(resmean)$cov)
 for(itr in 1 : nsim){
@@ -367,7 +367,7 @@ print(itr)
     theta <- resmean[itr, ]
 
 mvf  <- diag(resvar[, , itr]/n)
-cptheta[itr, ] <- (theta0 <= theta + 1.96 * sqrt(mvf) & theta0 >= theta - 1.96 * sqrt(mvf)  )
+#cptheta[itr, ] <- (theta0 <= theta + 1.96 * sqrt(mvf) & theta0 >= theta - 1.96 * sqrt(mvf)  )
 
 }
 
@@ -384,14 +384,14 @@ flower <- apply(flower, 2, median, na.rm = T)
 fest <- apply(fest1, 2, median, na.rm = T)
 festupl <- apply(fest1, 2, quantile, c(0.025, 0.975), na.rm = T)
 
-pdf('mestunif.pdf')
-plot(x, f, type = 'l', lty = 1)
+pdf(paste(paste('mest', n, sdis, sep = '_'), '.pdf', sep = ''))
+plot(x, f, type = 'l', lty = 1, ylim = c(-2.5, 2.5))
 lines(x, fest, lty = 2)
 #lines(density(x), col = 2)
 #lines(x, fupper, lty = 2, col = 2)
 #lines(x, flower, lty = 2, col = 2)
-#lines(x, festupl[1, ], lty = 2, col = 3)
-#lines(x, festupl[2, ], lty = 2, col = 3)
+lines(x, festupl[1, ], lty = 2, col = grey(0.3))
+lines(x, festupl[2, ], lty = 2, col = grey(0.3))
 
 dev.off()
 temp1 <- apply(fest1, 2, sd)
@@ -499,16 +499,3 @@ myjacobian <- function(func, x, method="Richardson", side=NULL,
   return(array(a, dim(a)[c(1,3)]))  
   } else stop("indicated method ", method, "not supported.")
 }
-
-norm 
-estvar 0.01017451 0.01040998 0.08435114 0.01125017 0.01101194 0.01089025
-emprivar 0.005077058 0.003526097 0.007586690 0.005226456 0.004502745 0.004356297
-
-lap
-estvar 0.008908322 0.008644043 0.011682261 0.013750753 0.007200846 0.021588959
-emprivar 0.003917783 0.011954769 0.011307511 0.012080420 0.007080073 0.012469778
-
-
-unif
-estvar 0.04455455 0.03016752 0.03324734 0.03627913 0.03130320 0.03198942
-emprivar 0.03389457 0.03592167 0.04709979 0.06889741 0.03098955 0.02879360
