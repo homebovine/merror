@@ -213,25 +213,29 @@ ssmeanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
     S <- -nums/dom - numa/dom
     mS <- t(S) %*% S /n
 }
-
+mn<- seq(200, 1000, 100)
+sdis <- 0
 a <-  2
 b <- 2
-#theta0 <- rep(-0.5, lb)
-nsim <- 1100
-n <- 500
-h <- n^{-1/5}
-sdis <- 1
 
-sig <-  1 #sqrt((0.5)^2/2) #lap = 1
-sigw <- 1.5 # sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48
-yw<- simu(1000, a, b, sdis)
+nsim <- 500
 lly <- 10
 llw <- 10
 up = 1#sqrt(0.025 * 12)/2
 ul = -1#-sqrt(0.025 * 12)/2
 u = (up + ul)/2
 v = abs(up - ul)/2
-
+for(sdis in c(0, 1, 2)){
+for( i in 1:length(mn)){
+n <- mn[i]
+h <- n^{-1/5}
+sig <- 1
+sigw <- 1.5
+if(sdis == 1){
+sig <- 0.5#sqrt((0.5)^2/2) #lap = 1 #norm 1
+sigw <-1.2#sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48#norm 1.5
+}
+yw<- simu(1000, a, b, sdis)
 if(sdis == 0 |sdis == 1 ){
 gy <- gauss.quad(lly,alpha=0,beta=0)
 gw <- gauss.quad(llw,alpha=0,beta=0)
@@ -247,29 +251,18 @@ ly <-  unique(ly)
 lw <- unique(lw)
 Delta <- getWeights(myGrid) * 1/(lyw[, 1] * (1 - lyw[, 1])) * 1/(lyw[, 2] * (1 - lyw[, 2]))
 }else{
-#myGrid <- createNIGrid(dim=2, type=c("GLe", "GLe"), level=c(6, 6))
-#lyw <- getNodes(myGrid)
-#ly <- log(lyw[, 1]/(1- lyw[, 1]))
-#lw <- v * (lyw[, 2] - 1/2) + u
-#ly <-  unique(ly)
-#lw <- unique(lw)
-#Delta <- getWeights(myGrid) * 1/(lyw[, 1] * (1 - lyw[, 1])) * v
 gy <- gauss.quad(lly,alpha=0,beta=0)
 gw <- gauss.quad(llw)
 ly <- log((1 + gy$nodes)/(1 - gy$nodes)) #sqrt( pi) *pnorm(gy$nodes, 0, 1/sqrt(2))
 lw <- v * (gw$nodes) + u
 Delta <-   as.vector((gy$weights * 2/(1 - gy$nodes^2)) %o%  (gw$weights * v))
-
 }
-
 x <-  rbeta(1000, a, b) 
-
 o <- order(x)
 x <- x[o]
 lux <- pbeta(x, a, b)
 lx <-  qbeta(seq(0, 1, length.out = 15), a, b) ##seq(0.01, 1, length.out = 15)#
 cdom <- sum(dbeta(lx, a, b))
-
 olc <- dbeta(lx, a, b)/cdom
 ywxx <- expand.grid(ly, lw, lx, lx)
 lc <- dbeta(ywxx[, 4], a, b)/cdom
@@ -277,32 +270,24 @@ ywxxc <- cbind( ywxx, lc)
 ywx <- expand.grid(lx, ly, lw)
 lc <- dbeta(ywx[, 1] , a, b)/cdom
 ywxc <- cbind(lc, ywx)
-
 knots = c(0.25,  0.5,  0.75)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
-lb = ceiling(1.3 * n^(1/5))
+lb = 4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
 b2 <- create.bspline.basis(range(x, lx), nbasis = lb, norder = 4)
 basis2 <- eval.basis(ywxxc[, 4], b2)#bs(ywxxc[, 4], 3, knots, Boundary.knots = c(0, 1))
 basis1 <-eval.basis(ywxxc[, 3], b2)# bs(ywxxc[, 3], 3, knots, Boundary.knots = c(0, 1))
 basis <- eval.basis(ywxc[, 2], b2) # bs(ywxc[, 2], 3, knots, Boundary.knots = c(0, 1))
 basisx <-  eval.basis(lx, b2) #bs(lx, 3, knots, Boundary.knots = c(0, 1))
 llx <- length(lx)
-
 lly <- length(ly)
 llw <- length(lw)
-
-
-
-
-f = sin(x * 2  * pi) # x *  (x - 0.5) * (x - 1)#dbeta(x, 2, 2)# 2* sin((x - 0.5)  * 12) * exp(-((x - 0.5) * 12)^2/10)#2000 * ((x- 0.5)* 10) - 251.97 * ((x -0.5)*10)^2 - 102 * ((x -0.5)*10)^3 +20* ((x -0.5) * 10)^4 #1 - 28.76 * x + 251.97 * x^2 - 1028.50 * x^3 +2069.72 * x^4 #-1975.95 * x^5 +712.78 * x^6
+f = sin(x * 2  * pi)
 tempba <-eval.basis(x, b2) #bs(x, 3, knots, Boundary.knots = c(0, 1))
 tempf <- function(theta){
     sum((tempba %*% theta - f)^2)
 }
 theta0 <- optim(rep(0.5, lb), tempf, gr = NULL,  method = 'BFGS',  hessian = FALSE) $par
 resmean <- matrix(NA, nsim, lb)
-resvar <- array(NA, c(lb, lb, nsim))
-
-
+resvar <- array(0, c(lb, lb, nsim))
 for(itr in 1:nsim){
     print(itr)
 set.seed(itr + 2017)
@@ -311,87 +296,73 @@ my <- matrix(ywdata[, 1], n, llx)
 mw <- matrix(ywdata[, 2], n, llx)
 mlx <- matrix(lx, nrow = n, ncol = llx, byrow = T)
 mc <- matrix(olc, nrow = n, ncol = llx, byrow = T)
-wt <-  ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-16, ahmatrix), 1e-16)##
-#invA <-  ginv(jacobian(smeanest, theta0, method="simple", side=NULL, method.args=list(eps = 1e-4), my, mw, mc, sdis), tol = 1e-16)
-#S <- smeanest(theta0, my, mw, mc, sdis)
-#invAS <- as.numeric(abs(invA %*% S)) * c(1, rep(1, lb - 1))  * 6
-tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'bobyqa',  itnmax=NULL, hessian=FALSE, control=list(factr = 1e7, pgtol = 1e-7, parscale = c(1e-2, rep(1, 4), 1e-2) , ndeps = rep(1e-7, lb)), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-16, ahmatrix = ahmatrix)
+wt <- diag(1, lb, lb)# ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-16, ahmatrix), 1e-16)##diag(1, lb, lb)# 
+
+tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'bobyqa',  itnmax=500, hessian=FALSE, control=list(), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-16, ahmatrix = ahmatrix1)
 tryres$par <- coef(tryres)
 tryres$convergence <- tryres$convcode
-
-
 print(tryres$convergence)
     if(class(tryres) != 'try-error'){
         resmean[itr, ] <- tryres$par
-
-	jh <- myjacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4)), my, mw, mc, sdis, 1e-16, ahmatrix)
-	sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis, 1e-16, ahmatrix)
-	jwh <- ginv(t(jh) %*% wt %*% jh, 1e-14)
-	
-	resvar[, , itr] <- jwh %*% t(jh) %*% wt %*% sh %*% t(wt) %*% jh %*% t(jwh)
+# jh <- myjacobian(smeanest, resmean[itr, ], method="simple", side=NULL, method.args=list(eps =  c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4)), my, mw, mc, sdis, 1e-16, ahmatrix)
+	# sh <- ssmeanest(resmean[itr, ], my, mw, mc, sdis, 1e-8, ahmatrix)
+	# jwh <- ginv(t(jh) %*% wt %*% jh, 1e-14)
+	 resvar[, , itr] <- 0# jwh %*% t(jh) %*% wt %*% sh %*% t(wt) %*% jh %*% t(jwh)
     }
-
-
-
-
 print(rbind(resmean[itr, ],theta0,  sqrt(diag(resvar[,  ,itr]/n))))
 }
-save(resmean, resvar, tempba, file = paste('resmean', n, sdis, sep = '_'))
-fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
-#fest <- tempba %*% apply(resmean, 2, median, na.rm = T) 
+save(resmean, resvar, tempba, x, file = paste('resmean', n, sdis, sep = '_'))
+}}
 
-temp <- apply(abs(resmean - matrix(theta0, nsim, lb, byrow = T)), 1, min)
-#resmean <- resmean[temp > 1e-8, ]
-#resvar <- resvar[, , temp> 1e-8]
-apply(resmean, 2, median, na.rm = T)
-sqrt(diag(apply(resvar, c(1, 2), median, na.rm = T)/n))
-apply(resmean, 2, sd, na.rm = T)
-#nsim <- nrow(resmean)
+load(paste('resmean', n, sdis, sep = '_'))
+f <- sin(2 * pi * x)
+fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
+
 mvf <- fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
 estv <- (cov.rob(resmean)$cov)
 for(itr in 1 : nsim){
-print(itr)
+	print(itr)
     theta <- resmean[itr, ]
 fest1[itr, ] <- tempba %*% theta
 temp <- tempba
-mvf[itr, ] <- diag(temp %*% resvar[, , itr]%*% t(temp ))/n #
-vf = mvf[itr, ]
-fupper[itr, ] <- fest1[itr, ] + 1.96 * sqrt(vf)
-flower[itr, ] <- fest1[itr, ] - 1.96 * sqrt(vf)
+#mvf[itr, ] <- diag(temp %*% resvar[, , itr]%*% t(temp ))/n #
+#vf = mvf[itr, ]
+#fupper[itr, ] <- fest1[itr, ] + 1.96 * sqrt(vf)
+#flower[itr, ] <- fest1[itr, ] - 1.96 * sqrt(vf)
 
 }
 
-cptheta <- matrix(NA, nsim, lb)
-for(itr in 1 : nsim){
-print(itr)
-    theta <- resmean[itr, ]
+# cptheta <- matrix(NA, nsim, lb)
+# for(itr in 1 : nsim){
+# print(itr)
+#     theta <- resmean[itr, ]
 
-mvf  <- diag(resvar[, , itr]/n)
-#cptheta[itr, ] <- (theta0 <= theta + 1.96 * sqrt(mvf) & theta0 >= theta - 1.96 * sqrt(mvf)  )
+# mvf  <- diag(resvar[, , itr]/n)
+# #cptheta[itr, ] <- (theta0 <= theta + 1.96 * sqrt(mvf) & theta0 >= theta - 1.96 * sqrt(mvf)  )
 
-}
+# }
 
-cp <- rep(NA, length(x))
-for(ix in 1:length(x)){
+# cp <- rep(NA, length(x))
+# for(ix in 1:length(x)){
 
-cp[ix] <- mean(fupper[1:nsim, ix] >= f[ix] & flower[1:nsim, ix] <= f[ix] , na.rm = T)
-}
+# cp[ix] <- mean(fupper[1:nsim, ix] >= f[ix] & flower[1:nsim, ix] <= f[ix] , na.rm = T)
+# }
 
 
 
-fupper <- apply(fupper, 2, median, na.rm = T)
-flower <- apply(flower, 2, median, na.rm = T)
+#fupper <- apply(fupper, 2, median, na.rm = T)
+#flower <- apply(flower, 2, median, na.rm = T)
 fest <- apply(fest1, 2, median, na.rm = T)
 festupl <- apply(fest1, 2, quantile, c(0.025, 0.975), na.rm = T)
 
-pdf(paste(paste('mest', n, sdis, sep = '_'), '.pdf', sep = ''))
-plot(x, f, type = 'l', lty = 1, ylim = c(-2.5, 2.5))
-lines(x, fest, lty = 2)
+pdf('temp.pdf')#pdf(paste(paste('mest', n, sdis, sep = '_'), '.pdf', sep = ''))
+plot( f~x, type = 'l', lty = 1, ylim = c(-2.5, 2.5))
+lines(fest~x, lty = 2)
 #lines(density(x), col = 2)
 #lines(x, fupper, lty = 2, col = 2)
 #lines(x, flower, lty = 2, col = 2)
-lines(x, festupl[1, ], lty = 2, col = grey(0.3))
-lines(x, festupl[2, ], lty = 2, col = grey(0.3))
+lines(festupl[1, ] ~x, lty = 2, col = grey(0.3))
+lines(festupl[2, ] ~x, lty = 2, col = grey(0.3))
 
 dev.off()
 temp1 <- apply(fest1, 2, sd)
@@ -499,3 +470,21 @@ myjacobian <- function(func, x, method="Richardson", side=NULL,
   return(array(a, dim(a)[c(1,3)]))  
   } else stop("indicated method ", method, "not supported.")
 }
+
+sdiff <- matrix(NA, 3, 9)
+for(sdis in 0:2){
+for(n in seq(200, 1000, 100)){
+lb = 4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
+nhb = 1/lb
+load(paste('resmean', n, sdis, sep = '_'))
+f <- sin(2 * pi * x)
+ix <- 500
+fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
+f <- sin( 2 * pi * x)
+sdiff[sdis+ 1, n/100 - 1]<- median(abs(fest[500] - f[500])) * sqrt(nhb) 
+}
+}
+size <- sqrt(seq(200, 1000, 100))^{-1}
+pdf('temp.pdf')
+plot(sdiff[2, ]~ size, type = 'l')
+dev.off()

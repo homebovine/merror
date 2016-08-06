@@ -151,17 +151,20 @@ hessian <- function(theta, sdis, bs, y){
 }
 
 
-
-a <- 1.5
-b <- 1.5
-sig <- sqrt(1/3)#lap sqrt(1/3) #norm sqrt(1/5)#sqrt(1/4)
-nsim <- 1100
-n <- 2000
-sdis <- 2
+for(sdis in 0:2){
+for(n in seq(500, 1000, 50)){
+a <- 4
+b <- 4
+if(sdis == 1){
+sig <- sqrt(1/3)#norm 1
+}else{
+sig <- 1
+}
+nsim <- 500
 ng <-  30
-upper <- 1
+upper <- 1/2
 
-lb <- 6
+lb <- ceiling(1.25* n^(1/5))
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
 nh <- 0.5
@@ -176,13 +179,13 @@ wn <- gauss.quad(ng,kind="legendre",alpha=0,beta=0)
 #wn$weights <- diff(c(-1, wn$nodes))#wn$weights * 1 /sqrt(1 - wn$nodes^2)#
 wn$nodes <- 1/2 * wn$nodes + 1/2
 rnodes <- range(wn$nodes)
-objbasis <- create.bspline.basis(range(wn$nodes), breaks = c(rnodes[1], 0.1, 0.9, rnodes[2]),  norder = 4)
+objbasis <- create.bspline.basis(range(wn$nodes), nbasis = lb,  norder = 4)
 basis <- eval.basis(wn$nodes, objbasis)#ns(wn$nodes, df = lb,     Boundary.knots= range(0, 1))
 wn$weights <- 1/2 * wn$weights
 #basis <- predict(basis, wn$nodes)
 nodes <-  matrix(wn$nodes, n, ng, byrow = T) 
 weights <-  matrix(wn$weights, n, ng, byrow = T)
-t <- runif(n, rnodes[1], rnodes[2])
+t <- rbeta(n, a, b)
 covflg <- rep(NA, nsim)
 
 o <- order(t)
@@ -220,10 +223,11 @@ sand <- derivdenest(res$par, sdis, basis, my)
 }
     
 }
+save(rvar, rtheta, x, objbasis, basis, weights,  file = paste('den', n, sdis, sep = '_'), precheck = 0)
+}
+}
 
-
-
-
+#load(paste('den', n, sdis, sep = '_'))
 mtheta <- apply(rtheta, 2, median)
 fupper <- flower <- fest1 <- matrix(NA, nsim, length(x))
 dfun <- function(theta){
@@ -243,18 +247,18 @@ for(ix in 1:n){
 
 cp[ix] <- mean(fupper[, ix] > dbeta(x[ix], a, b) & flower[, ix] <= dbeta(x[ix], a, b) )
 }
-fupper <- apply(fupper, 2, median)
-flower <- apply(flower, 2, median)
-fest <- apply(fest1, 2, median)
-festupl <- apply(fest1, 2, quantile, c(0.025, 0.975))
-pdf('estlap.pdf')
-plot(x, f, type = 'l', lty = 1)
+fupper <- apply(fupper, 2, median, na.rm = T)
+flower <- apply(flower, 2, median, na.rm  = T)
+fest <- apply(fest1, 2, median, na.rm = T)
+festupl <- apply(fest1, 2, quantile, c(0.025, 0.975), na.rm = T)
+pdf(paste(paste('den', n, sdis, sep = '_'), '.pdf', sep = ''))
+plot(x, f, type = 'l', lty = 1, ylim = c(-0.5, 5))
 lines(x, fest, lty = 2)
 #lines(density(x), col = 2)
 #lines(x, fupper, lty = 2, col = 2)
 #lines(x, flower, lty = 2, col = 2)
-#lines(x, festupl[1, ], lty = 2, col = 3)
-#lines(x, festupl[2, ], lty = 2, col = 3)
+lines(x, festupl[1, ], lty = 2, col = grey(0.5))
+lines(x, festupl[2, ], lty = 2, col = grey(0.5))
 
 dev.off()
 temp1 <- apply(fest1, 2, sd)
@@ -280,4 +284,30 @@ estimated norm 1.708348 1.452574 2.825442 2.827463 1.484432 1.660037
 
 estimated lap 1.701376 1.262628 1.965442 1.977015 1.291913 1.700157
 emprical lap 1.641232 1.500220 2.092283 1.753365 1.371908 1.800199
+ix <- 500
+sdiff <- matrix(NA, 3, 7)
+for(sdis in 0:2){
+for(n in seq(200, 500, 50)){
+lb <- ceiling(1.25* n^(1/5))
+nh <- 1/lb
+fest1 <- matrix(NA, nsim , n)
+load(paste('den', n, sdis, sep = '_'))
+for(itr in 1 : nsim){
+    theta <- rtheta[itr, ]
+fest1[itr, ] <- exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
 
+
+}
+fest <- apply(fest1, 2, median, na.rm = T)
+f <-   dbeta(x, a, b)
+sdiff[sdis + 1, (n - 200)/50 + 1] = mean(abs(fest - f)) * sqrt(nh)
+}
+}
+nvec <- seq(200, 500, 50)^{-1/2}
+pdf('temp1.pdf')#pdf(paste(paste('den_diff', sep = ''), ".pdf", sep = ''))
+plot(sdiff[1, c(1:7) ] ~ nvec, type = 'l', ylim = c(min(sdiff), max(sdiff)),  ylab = 'mean absolute error times bandwidth', xlab ='inverse of root n')
+lines(sdiff[2, c(1:7)] ~nvec, lty = 3)
+lines(sdiff[3, c(1:7)] ~ nvec, lty = 6)
+legend('topleft',c('normal error', 'laplace error', 'uniform error'),  lty = c(1, 3, 6) )
+
+dev.off()
