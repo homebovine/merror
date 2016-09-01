@@ -152,7 +152,7 @@ hessian <- function(theta, sdis, bs, y){
 
 
 for(sdis in 0:2){
-for(n in seq(500, 1000, 50)){
+for(n in seq(200, 1000, 100)){
 a <- 4
 b <- 4
 if(sdis == 1){
@@ -164,7 +164,7 @@ nsim <- 500
 ng <-  30
 upper <- 1/2
 
-lb <- ceiling(1.25* n^(1/5))
+lb <- round(1.3* n^(1/5))
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
 nh <- 0.5
@@ -179,7 +179,7 @@ wn <- gauss.quad(ng,kind="legendre",alpha=0,beta=0)
 #wn$weights <- diff(c(-1, wn$nodes))#wn$weights * 1 /sqrt(1 - wn$nodes^2)#
 wn$nodes <- 1/2 * wn$nodes + 1/2
 rnodes <- range(wn$nodes)
-objbasis <- create.bspline.basis(range(wn$nodes), nbasis = lb,  norder = 4)
+objbasis <- create.bspline.basis(c(0, 1), nbasis = lb,  norder = 4)
 basis <- eval.basis(wn$nodes, objbasis)#ns(wn$nodes, df = lb,     Boundary.knots= range(0, 1))
 wn$weights <- 1/2 * wn$weights
 #basis <- predict(basis, wn$nodes)
@@ -285,29 +285,31 @@ estimated norm 1.708348 1.452574 2.825442 2.827463 1.484432 1.660037
 estimated lap 1.701376 1.262628 1.965442 1.977015 1.291913 1.700157
 emprical lap 1.641232 1.500220 2.092283 1.753365 1.371908 1.800199
 ix <- 500
-sdiff <- matrix(NA, 3, 7)
+sdiff <- matrix(NA, 3, 9)
 for(sdis in 0:2){
-for(n in seq(200, 500, 50)){
+for(n in seq(200, 1000, 100)){
 lb <- ceiling(1.25* n^(1/5))
 nh <- 1/lb
-fest1 <- matrix(NA, nsim , n)
+fest1 <- matrix(NA, nsim , 100)
 load(paste('den', n, sdis, sep = '_'))
+x <- seq(0.1, 0.9, length.out = 100)
 for(itr in 1 : nsim){
     theta <- rtheta[itr, ]
-fest1[itr, ] <- exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ])
-
-
-}
-fest <- apply(fest1, 2, median, na.rm = T)
 f <-   dbeta(x, a, b)
-sdiff[sdis + 1, (n - 200)/50 + 1] = mean(abs(fest - f)) * sqrt(nh)
+fest1[itr, ] <- abs(exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ]) -f)
+
+
+}
+fest <- apply(fest1,1, max, na.rm = T)
+
+sdiff[sdis + 1, (n - 200)/100 + 1] = mean(fest) * sqrt(n * nh)#mean(abs(fest - f)) * sqrt(nh)
 }
 }
-nvec <- seq(200, 500, 50)^{-1/2}
+nvec <- seq(200, 1000, 100)
 pdf('temp1.pdf')#pdf(paste(paste('den_diff', sep = ''), ".pdf", sep = ''))
-plot(sdiff[1, c(1:7) ] ~ nvec, type = 'l', ylim = c(min(sdiff), max(sdiff)),  ylab = 'mean absolute error times bandwidth', xlab ='inverse of root n')
-lines(sdiff[2, c(1:7)] ~nvec, lty = 3)
-lines(sdiff[3, c(1:7)] ~ nvec, lty = 6)
+plot(sdiff[1, ] ~ nvec, type = 'l', ylim = c(min(sdiff), max(sdiff)),  ylab = 'mean absolute error times bandwidth', xlab ='inverse of root n')
+lines(sdiff[2,] ~nvec, lty = 3)
+lines(sdiff[3, ] ~ nvec, lty = 6)
 legend('topleft',c('normal error', 'laplace error', 'uniform error'),  lty = c(1, 3, 6) )
 
 dev.off()
