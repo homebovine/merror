@@ -215,8 +215,8 @@ ssmeanest <- function(theta,  my, mw, mc, sdis, tol, ahmatrix){
 }
 mn<- seq(200, 1000, 100)
 sdis <- 0
-a <-  2
-b <- 2
+a <-  4
+b <- 4
 
 nsim <- 500
 lly <- 10
@@ -233,9 +233,8 @@ sig <- 1
 sigw <- 1.5
 if(sdis == 1){
 sig <- 0.5#sqrt((0.5)^2/2) #lap = 1 #norm 1
-sigw <-1.2#sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48#norm 1.5
+sigw <- 1#sqrt((0.5)^2/2)#norm sqrt((0.5)^2/2) lap 1.48#norm 1.5
 }
-yw<- simu(1000, a, b, sdis)
 if(sdis == 0 |sdis == 1 ){
 gy <- gauss.quad(lly,alpha=0,beta=0)
 gw <- gauss.quad(llw,alpha=0,beta=0)
@@ -257,11 +256,11 @@ ly <- log((1 + gy$nodes)/(1 - gy$nodes)) #sqrt( pi) *pnorm(gy$nodes, 0, 1/sqrt(2
 lw <- v * (gw$nodes) + u
 Delta <-   as.vector((gy$weights * 2/(1 - gy$nodes^2)) %o%  (gw$weights * v))
 }
-x <-  rbeta(1000, a, b) 
+x <-  rbeta(n, a, b) 
 o <- order(x)
 x <- x[o]
 lux <- pbeta(x, a, b)
-lx <-  qbeta(seq(0, 1, length.out = 15), a, b) ##seq(0.01, 1, length.out = 15)#
+lx <-  qbeta(seq(0, 1, length.out = 10), a, b) ##seq(0.01, 1, length.out = 15)#
 cdom <- sum(dbeta(lx, a, b))
 olc <- dbeta(lx, a, b)/cdom
 ywxx <- expand.grid(ly, lw, lx, lx)
@@ -271,7 +270,7 @@ ywx <- expand.grid(lx, ly, lw)
 lc <- dbeta(ywx[, 1] , a, b)/cdom
 ywxc <- cbind(lc, ywx)
 knots = c(0.25,  0.5,  0.75)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
-lb = 4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
+lb = round(1.3 * n^{1/5})#4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
 b2 <- create.bspline.basis(range(x, lx), nbasis = lb, norder = 4)
 basis2 <- eval.basis(ywxxc[, 4], b2)#bs(ywxxc[, 4], 3, knots, Boundary.knots = c(0, 1))
 basis1 <-eval.basis(ywxxc[, 3], b2)# bs(ywxxc[, 3], 3, knots, Boundary.knots = c(0, 1))
@@ -296,9 +295,9 @@ my <- matrix(ywdata[, 1], n, llx)
 mw <- matrix(ywdata[, 2], n, llx)
 mlx <- matrix(lx, nrow = n, ncol = llx, byrow = T)
 mc <- matrix(olc, nrow = n, ncol = llx, byrow = T)
-wt <- diag(1, lb, lb)# ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-16, ahmatrix), 1e-16)##diag(1, lb, lb)# 
+wt <- ginv(ssmeanest(theta0, my, mw, mc, sdis, 1e-16, ahmatrix), 1e-16)##diag(1, lb, lb)# 
 
-tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'bobyqa',  itnmax=500, hessian=FALSE, control=list(), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-16, ahmatrix = ahmatrix1)
+tryres <- optimx(theta0, meanest, gr = NULL, hess = NULL, lower = -Inf, upper = Inf, method = 'newuoa',  itnmax=500, hessian=FALSE, control=list(), my = my, mw = mw, mc = mc, sdis = sdis, tol = 1e-16, ahmatrix = ahmatrix)
 tryres$par <- coef(tryres)
 tryres$convergence <- tryres$convcode
 print(tryres$convergence)
@@ -311,7 +310,7 @@ print(tryres$convergence)
     }
 print(rbind(resmean[itr, ],theta0,  sqrt(diag(resvar[,  ,itr]/n))))
 }
-save(resmean, resvar, tempba, x, file = paste('resmean', n, sdis, sep = '_'))
+save(resmean, resvar, tempba, x, lb, file = paste('resmean', n, sdis, sep = '_'))
 }}
 
 load(paste('resmean', n, sdis, sep = '_'))
@@ -471,20 +470,27 @@ myjacobian <- function(func, x, method="Richardson", side=NULL,
   } else stop("indicated method ", method, "not supported.")
 }
 
+
 sdiff <- matrix(NA, 3, 9)
 for(sdis in 0:2){
 for(n in seq(200, 1000, 100)){
-lb = 4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
-nhb = 1/lb
 load(paste('resmean', n, sdis, sep = '_'))
+#lb = ceiling(1.3 * n^{1/5})#4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800)#ceiling(1.3 * n^(1/5))
+nhb = 1/lb
+
 f <- sin(2 * pi * x)
 ix <- 500
 fest <- apply(resmean[, ] %*% t(tempba), 2, median, na.rm = T)
 f <- sin( 2 * pi * x)
-sdiff[sdis+ 1, n/100 - 1]<- median(abs(fest[500] - f[500])) * sqrt(nhb) 
+sdiff[sdis+ 1, (n - 200)/100 + 1]<- mean(abs(fest - f)) * sqrt(nhb) 
 }
 }
 size <- sqrt(seq(200, 1000, 100))^{-1}
+
 pdf('temp.pdf')
-plot(sdiff[2, ]~ size, type = 'l')
+plot(sdiff[1, ]~ size, type = 'l', ylim = c(min(sdiff), max(sdiff)))
+lines(sdiff[2, ] ~size, lty = 4)
+lines(sdiff[3, ]~size, lty = 6)
+legend('topleft', c('normal error', 'laplace error', 'uniform error'), lty = c(1, 4, 6))
 dev.off()
+
