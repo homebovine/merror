@@ -149,22 +149,22 @@ hessian <- function(theta, sdis, bs, y){
     
     
 }
-
-
-for(sdis in 0:2){
-for(n in seq(200, 1000, 100)){
+nsim <- 200
+ng <-  30
+upper <- 1/8
+sig <- 0.05
+for(sdis in 0){
+for(n in c(500, 1000, 2000)){
 a <- 4
 b <- 4
 if(sdis == 1){
-sig <- sqrt(1/3)#norm 1
+sig <- 0.05/sqrt(2) #sqrt(1/3)#norm 1
 }else{
-sig <- 1
+sig <- 0.05
 }
-nsim <- 500
-ng <-  30
-upper <- 1/2
 
 lb <- round(1.3* n^(1/5))
+        #lb = 4 * (n <= 500) + 5 * (n>500 & n <= 800) + 6 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)#
 
 knots = c(0.3, 0.5, 0.7)#c( 0.2, 0.4,  0.6, 0.8)#c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75)
 nh <- 0.5
@@ -193,37 +193,37 @@ t <- t[o]
 x <- t 
 f <-   dbeta(t, a, b)
 getini <- function(theta){
-sum((exp(eval.basis(x, objbasis) %*% theta)/(sum(exp(basis %*% theta) * weights[1, ]))  - f)^2)
+mean((exp(eval.basis(x, objbasis) %*% theta)/(sum(exp(basis %*% theta) * weights[1, ]))  - f)^2)
 }
-    #theta0 <- optim(rep(1, lb), getini, gr = NULL,  method = 'Nelder-Mead', control = list(maxit = 500),   hessian = TRUE)$par * 1.01
-   theta0 <- optim(rep(1, lb), getini, gr = NULL,  method = 'BFGS', control = list(maxit = 500),   hessian = TRUE)$par 
+
+   theta0 <- optim(rep(1, lb), getini, gr = NULL,  method = 'BFGS')$par 
 for(itr in 1 : nsim){
     print(itr)
     y <- simu(n, a, b, sdis)
     my <- matrix(y, n, ng)
     
-#    res <- spg(theta0, denest, gr=score, method=3, lower=rep(-Inf, lb), upper=rep(Inf, lb), project=NULL, projectArgs=NULL, control=list(maxit = 500), quiet=FALSE, alertConvergence=TRUE, sdis = sdis, bs = basis, y = my)
 
 
-    res <- try(optim(theta0, denest, gr = score, sdis, basis, my, method = 'BFGS',  control = list(ndeps = rep(1e-6,lb),  reltol = 1e-8, abstol = 1e-8,    maxit = 500), hessian = TRUE))
-    temp <- try(ginv(hessian(res$par, sdis, basis, my), tol = 1e-4))#ginv(res$hessian)#
+    res <- try(optimx(theta0, denest, gr = NULL,  hess = NULL, lower = -Inf, upper = Inf,  method = 'BFGS',itnmax=500, hessian=FALSE, control=list(),  sdis = sdis, bs = basis,y = my))#,  control = list(ndeps = rep(1e-6,lb),  reltol = 1e-8, abstol = 1e-8,    maxit = 500), hessian = TRUE))
+    #temp <- try(ginv(hessian(res$par, sdis, basis, my), tol = 1e-4))#ginv(res$hessian)#
 	
-print(res$par)
-	if(class(res) != 'try-error' && class(temp) != 'try-error'){
-sand <- derivdenest(res$par, sdis, basis, my)
+#print(res$par)
+#	if(class(res) != 'try-error' && class(temp) != 'try-error'){
+#sand <- derivdenest(res$par, sdis, basis, my)
 
-    rtheta[itr, ]<- res$par
-    S<- eigen(sand)
-    eig <- eigen(sand)
-    eig$value[eig$value<1e-5] <- 0 ##unif 8e-6
-    eig$value[eig$value>0] <- eig$value[eig$value>0]^{-1}
+    rtheta[itr, ]<- coef(res)#res$par
+ #   S<- eigen(sand)
+  #  eig <- eigen(sand)
+   # eig$value[eig$value<1e-5] <- 0 ##unif 8e-6
+    #eig$value[eig$value>0] <- eig$value[eig$value>0]^{-1}
     
-    rvar[, , itr ] <- (eig$vector %*% diag(eig$value) %*% t(eig$vector)/n)#diag(ginv(sand, tol= 1e-2)/n)# diag( temp/n)#diag((temp %*% sand %*% t(temp))/n)
-    covflg[itr] <- res$convergence
+    rvar[, , itr ] <- 0#(eig$vector %*% diag(eig$value) %*% t(eig$vector)/n)#diag(ginv(sand, tol= 1e-2)/n)# diag( temp/n)#diag((temp %*% sand %*% t(temp))/n)
+    #covflg[itr] <- res$convergence
+#}
+print(rbind(rtheta[itr, ], theta0))    
 }
-    
-}
-save(rvar, rtheta, x, objbasis, basis, weights,  file = paste('den', n, sdis, sep = '_'), precheck = 0)
+
+save(rvar, rtheta, x, objbasis, basis, weights, lb,   file = paste('densmall', n, sdis, sep = '_'), precheck = 0)
 }
 }
 
@@ -284,32 +284,85 @@ estimated norm 1.708348 1.452574 2.825442 2.827463 1.484432 1.660037
 
 estimated lap 1.701376 1.262628 1.965442 1.977015 1.291913 1.700157
 emprical lap 1.641232 1.500220 2.092283 1.753365 1.371908 1.800199
+nl <- seq(200,2000, 100)
+l <- length(nl)
 ix <- 500
-sdiff <- matrix(NA, 3, 9)
+nhn <- sdiff <- matrix(NA, 3, l)
+
 for(sdis in 0:2){
-for(n in seq(200, 1000, 100)){
-lb <- ceiling(1.25* n^(1/5))
-nh <- 1/lb
+for(i in 1:l){
+n <- nl[i]
+
 fest1 <- matrix(NA, nsim , 100)
 load(paste('den', n, sdis, sep = '_'))
-x <- seq(0.1, 0.9, length.out = 100)
+#        lb = 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)#lb <- round(1.3* n^(1/5)) 
+x <- seq(0, 1, length.out = 100)
+  nh <- 1/(lb)
 for(itr in 1 : nsim){
     theta <- rtheta[itr, ]
 f <-   dbeta(x, a, b)
-fest1[itr, ] <- abs(exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ]) -f)
+fest1[itr, ] <-abs(exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ]) -f)
 
 
 }
 fest <- apply(fest1,1, max, na.rm = T)
 
-sdiff[sdis + 1, (n - 200)/100 + 1] = mean(fest) * sqrt(n * nh)#mean(abs(fest - f)) * sqrt(nh)
+sdiff[sdis + 1, i] = median(fest)# * sqrt(n * nh)#mean(abs(fest - f)) * sqrt(nh)
+nhn[sdis+ 1, i] <- sqrt(n* nh)
 }
 }
-nvec <- seq(200, 1000, 100)
-pdf('temp1.pdf')#pdf(paste(paste('den_diff', sep = ''), ".pdf", sep = ''))
-plot(sdiff[1, ] ~ nvec, type = 'l', ylim = c(min(sdiff), max(sdiff)),  ylab = 'mean absolute error times bandwidth', xlab ='inverse of root n')
-lines(sdiff[2,] ~nvec, lty = 3)
-lines(sdiff[3, ] ~ nvec, lty = 6)
+nvec <- seq(500, 2000, 100)
+sdiff1 <- sdiff * nhn
+nhn1 <- nvec
+sdiff1 <- sdiff1
+pdf('den.pdf')#pdf(paste(paste('den_diff', sep = ''), ".pdf", sep = ''))
+plot(sdiff1[1, -(1:3) ] ~ nvec, type = 'l', ylim = c(min(sdiff1), max(sdiff1)+ 5),  ylab = 'Root nh maximum absolute error', xlab ='Sample size')
+lines(sdiff1[2,-(1:3)] ~ nvec, lty = 3)
+lines(sdiff1[3, -(1:3)] ~ nvec, lty = 6)
 legend('topleft',c('normal error', 'laplace error', 'uniform error'),  lty = c(1, 3, 6) )
 
 dev.off()
+mse <- matrix(NA, 3, 3)
+for(sdis in 0:2){
+j <- 0
+    for(n in c(500, 1000, 2000)){
+j <- j + 1
+    fest1 <- matrix(NA, nsim , 100)
+    load(paste('densmall', n, sdis, sep = '_'))
+#        lb = 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)#lb <- round(1.3* n^(1/5)) 
+	 x <- seq(0, 1, length.out = 100)
+f <-   dbeta(x, a, b)
+mf <- matrix(f, nrow = nsim, ncol = length(x), byrow = T)
+x <- seq(0, 1, length.out = 100)
+  nh <- 1/(lb)
+for(itr in 1 : nsim){
+    theta <- rtheta[itr, ]
+f <-   dbeta(x, a, b)
+fest1[itr, ] <- (exp(eval.basis( x, objbasis) %*% theta) /sum(exp(basis %*% theta)  * weights[1, ]))
+
+
+}
+mse[sdis + 1, j] <- round(mean(apply(abs(fest1 - mf), 1, max)), 3)
+
+
+	 pdf(paste('den_', n, sdis, '.pdf', sep=''))
+
+	 x <- x
+	 fest <- apply(fest1,2, median, na.rm = T)
+	 qfest <- apply(fest1,2,quantile, c(0.05, 0.95),  na.rm = T)
+	 plot(f~x, type = 'l', ylim = c(0, 4))
+	 lines((fest ~x), lty = 2, col= 1)
+	 if(sdis == FALSE){
+	 	 lines(x, qfest[1, ], lty = 2)
+	 	 lines(x, qfest[2, ], lty = 2)
+	 }else{
+		lines(x, qfest[1, ], lty = 2)
+	 	lines(x, qfest[2, ], lty = 2)
+		}
+#legend('topright', paste('MSE = ', mse, sep = ''))
+		dev.off()
+		}
+}
+
+
+
