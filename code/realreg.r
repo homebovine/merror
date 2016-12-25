@@ -320,7 +320,7 @@ load('framdata')
 n <- ceiling(nrow(framdata))
 
 sig <- sqrt(mean(lm(framdata[, 1] ~ framdata[, 2])$residuals^2))
-sigw <- 0.0646
+#sigw <- 0.0646
        
        
 gy <- gauss.quad(lly,'hermite', alpha=0,beta=0)
@@ -343,7 +343,8 @@ ywx <- expand.grid(lx, ly, lw, lx)
 lc <- dbeta(ywx[, 1] , 1, 1)/cdom
 ywxc <- cbind(lc, ywx)
        
-lb = 7# 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)
+lb = 9# 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)
+
 b2 <- create.bspline.basis(range(x, lx), nbasis = lb, norder = 4)
 basis2 <- eval.basis(ywxxc[, 4], b2)
 basis1 <-eval.basis(ywxxc[, 3], b2)
@@ -386,7 +387,7 @@ for(itr in 1:nsim){
             }
             print(rbind(resmean[itr, ],theta0))
         }
-        save(resmean,  tempba, x, lb, train, file = paste('realreg1'))
+        save(resmean,  tempba, x, lb, train, file = paste('realreg2'))
 
 
 resmean[itr, ] %*% t(tempba)
