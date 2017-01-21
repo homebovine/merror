@@ -151,11 +151,11 @@ hessian <- function(theta, sdis, bs, y){
 }
 sdis <- 0
 nsim <- 100
-ng <-  30
+ng <-  15
 ntest <- 10
 
 load('framdata')
-sig <- sigw#0.0646
+#sigw <- sigw * 0.9#0.0646
 n <- ceiling(nrow(framdata))
 lb <- 7#round(1.3* n^(1/5))
 testint <- gauss.quad(ntest,'hermite', alpha=0,beta=0)
@@ -185,17 +185,20 @@ getini <- function(theta){
 mean((exp(eval.basis(x, objbasis) %*% theta)/(sum(exp(basis %*% theta) * weights[1, ]))  - f)^2)
 }
 
-#theta0 <- optim(rep(1, lb), getini, gr = NULL,  method = 'BFGS')$par 
-#theta0 <- c(-0.3736096, 0.9683432,   2.0193998,   3.5105639,   4.1407997,  -4.2655174)#c(0.7813047, -0.1409199, 2.2438951, 2.4553044, 4.3708748, 2.5468120, -5.2573229)
+theta0 <- optim(rep(1, lb), getini, gr = NULL,  method = 'BFGS')$par 
+#theta0 <- c(-1.5952947,   1.7554813,  -0.3663809,   5.3695596,  -2.2144640,   3.5084826,   0.5425829)
 estden <- matrix(NA, nsim, 512)
 for(itr in 1 : nsim){
 	set.seed(2017 + itr)
-    train<- sample(1:nrow(framdata), n, replace = T)
+    train<- sample(1:nrow(framdata), n, replace = TRUE)
+if(itr == 1){
+train <- 1:n
+}
     
     y <- framdata[train, 2]
     testy <- framdata[-train, 2]
     my <- matrix(y, n, ng)
-    res <- try(optimx(theta0, denest, gr = NULL,  hess = NULL, lower = NULL, upper = NULL,  method = 'newuoa',itnmax=1000, hessian=FALSE, control=list(),  sdis = sdis, bs = basis,y = my))
+    res <- try(optimx(theta0, denest, gr = NULL,  hess = NULL, lower = -Inf, upper = Inf,  method = 'BFGS',itnmax=500, hessian=FALSE, control=list(),  sdis = sdis, bs = basis,y = my))
 
     rtheta[itr, ]<- coef(res)
     # testxy <- density(testy)
@@ -214,7 +217,8 @@ for(itr in 1 : nsim){
 print(rbind(rtheta[itr, ], theta0))    
 }
 
-save( rtheta,  file = paste('realfull1'), precheck = 0)
+
+save( rtheta,  file = paste('realden2'), precheck = 0)
 
 
 #load(paste('den', n, sdis, sep = '_'))

@@ -5,6 +5,7 @@ library(statmod)
 library(numDeriv)
 library(fda)
 library(minpack.lm)
+library(MASS)
 simu <- function(n,a, b,  sdis){
     x <-  rbeta(n, a, b) 
     if(sdis == 0){
@@ -309,7 +310,7 @@ myjacobian <- function(func, x, method="Richardson", side=NULL,
 }
 
 
-
+ng <- 15
 sdis <- 0
 
 nsim <- 100
@@ -320,7 +321,7 @@ load('framdata')
 n <- ceiling(nrow(framdata))
 
 sig <- sqrt(mean(lm(framdata[, 1] ~ framdata[, 2])$residuals^2))
-#sigw <- 0.0646
+#sigw <- sigw * 0.9
        
        
 gy <- gauss.quad(lly,'hermite', alpha=0,beta=0)
@@ -328,24 +329,28 @@ gw <- gauss.quad(llw,'hermite', alpha=0,beta=0)
 ly <- gy$nodes
 lw <- gw$nodes
 Delta <-   as.vector((gy$weights ) %o%  (gw$weights ))
-       
-x <-  rbeta(n, 1, 1) 
+
+wn <- gauss.quad(ng,kind="legendre",alpha=0,beta=0)
+wn$nodes <- 1/2 * wn$nodes + 1/2    
+x <-  rbeta(n, 1, 1) #wn$nodes#
 o <- order(x)
 x <- x[o]
 lux <- pbeta(x, 1, 1)
 lx <-  qbeta(seq(0, 1, length.out = 15), 1, 1) ##seq(0.01, 1, length.out = 15)#
 cdom <- sum(dbeta(lx, 1, 1))
-olc <- dbeta(lx, 1, 1)/cdom
+olc <- dbeta(lx, 1, 1)/cdom#1/2 * wn$weights#
+#xfun <- approxfun(x, olc)
 ywxx <- expand.grid(ly, lw, lx, lx)
-lc <- dbeta(ywxx[, 4],1, 1)/cdom
+lc <-  dbeta(ywxx[, 4],1, 1)/cdom#xfun(ywxx[, 4])#
 ywxxc <- cbind(ywxx, lc)
 ywx <- expand.grid(lx, ly, lw, lx)
-lc <- dbeta(ywx[, 1] , 1, 1)/cdom
+lc <- dbeta(ywx[, 1] , 1, 1)/cdom#xfun(ywx[, 1])#olc[ywx[, 1] %in% x]#
 ywxc <- cbind(lc, ywx)
-       
-lb = 9# 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)
+#breaks <- c(0, 0.2, 0.4,   0.5,  1)       
+lb = 7# 4 * (n <= 500) + 6 * (n>500 & n <= 800) + 7 * (n >800 & n <= 1000)+ 8 * (n >1000 & n <= 1500)  + 9 * (n > 1500)
 
-b2 <- create.bspline.basis(range(x, lx), nbasis = lb, norder = 4)
+b2 <- create.bspline.basis(c(0, 1), nbasis = lb,  norder = 4)
+
 basis2 <- eval.basis(ywxxc[, 4], b2)
 basis1 <-eval.basis(ywxxc[, 3], b2)
 basis <- eval.basis(ywxc[, 2], b2) 
@@ -361,12 +366,14 @@ tempf <- function(theta){
 }
 theta0 <- optim(rep(0.5, lb), tempf, gr = NULL,  method = 'BFGS',  hessian = FALSE) $par
 resmean <- matrix(NA, nsim, lb)
-
+#theta0 <- c(-1.5952947,   1.7554813,  -0.3663809,   5.3695596,  -2.2144640,   3.5084826,   0.5425829)
 for(itr in 1:nsim){
     print(itr)
     set.seed(itr + 2017)
-    train<- sample(1:nrow(framdata), n, replace = T)
-    
+    train<- sample(1:nrow(framdata), round(n), replace = T)
+    if(itr == 1){
+train <- 1:n
+}     
    
     ywdata <- framdata[train, ]
     #testy <- framdata[-train, ]
@@ -381,13 +388,14 @@ for(itr in 1:nsim){
     tryres$par <- coef(tryres)
     tryres$convergence <- tryres$convcode
     print(tryres$convergence)
-            if(class(tryres) != 'try-error'){
+
                 resmean[itr, ] <- tryres$par
                                         
-            }
+
             print(rbind(resmean[itr, ],theta0))
         }
-        save(resmean,  tempba, x, lb, train, file = paste('realreg2'))
+
+        save(resmean,  lb, train,  file = paste('realreg2'))
 
 
 resmean[itr, ] %*% t(tempba)
